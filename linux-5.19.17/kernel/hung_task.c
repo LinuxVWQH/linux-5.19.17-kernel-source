@@ -106,8 +106,12 @@ static void check_hung_task(struct task_struct *t, unsigned long timeout)
 	if (unlikely(!switch_count))
 		return;
 
+	/*
+	* 如果总切换次数和last_switch_count不等，表示在上次khungtaskd更新last_switch_count之后就发生了进程
+	* 切换；反之，相等则表示120s时间内没有发生切换。
+	*/
 	if (switch_count != t->last_switch_count) {
-		t->last_switch_count = switch_count;
+		t->last_switch_count = switch_count; // update last_switch_count value
 		t->last_switch_time = jiffies;
 		return;
 	}
@@ -116,10 +120,11 @@ static void check_hung_task(struct task_struct *t, unsigned long timeout)
 
 	trace_sched_process_hang(t);
 
+	// sysctl_hung_task_panic:任务长时间处于D态是否触发panic
 	if (sysctl_hung_task_panic) {
-		console_verbose();
-		hung_task_show_lock = true;
-		hung_task_call_panic = true;
+		console_verbose(); // 在console显示详细信息
+		hung_task_show_lock = true;  // 这个变量控制是否在挂起任务的堆栈跟踪中显示锁定信息
+		hung_task_call_panic = true; // 这个变量用于指示系统在出现挂起任务时是否应该触发内核崩溃
 	}
 
 	/*
@@ -127,6 +132,7 @@ static void check_hung_task(struct task_struct *t, unsigned long timeout)
 	 * complain:
 	 */
 	if (sysctl_hung_task_warnings) {
+		// hung task错误打印次数限制，默认为10次，整个系统运行期间最多打印10次
 		if (sysctl_hung_task_warnings > 0)
 			sysctl_hung_task_warnings--;
 		pr_err("INFO: task %s:%d blocked for more than %ld seconds.\n",
@@ -137,7 +143,7 @@ static void check_hung_task(struct task_struct *t, unsigned long timeout)
 			init_utsname()->version);
 		pr_err("\"echo 0 > /proc/sys/kernel/hung_task_timeout_secs\""
 			" disables this message.\n");
-		sched_show_task(t);
+		sched_show_task(t); // 显示进程ID、名称、状态以及栈等信息
 		hung_task_show_lock = true;
 
 		if (sysctl_hung_task_all_cpu_backtrace)
@@ -177,7 +183,7 @@ static bool rcu_lock_break(struct task_struct *g, struct task_struct *t)
  */
 static void check_hung_uninterruptible_tasks(unsigned long timeout)
 {
-	int max_count = sysctl_hung_task_check_count;
+	int max_count = sysctl_hung_task_check_count; // 检测最大进程数，默认为最大进程号
 	unsigned long last_break = jiffies;
 	struct task_struct *g, *t;
 
@@ -190,6 +196,7 @@ static void check_hung_uninterruptible_tasks(unsigned long timeout)
 
 	hung_task_show_lock = false;
 	rcu_read_lock();
+	// 遍历所有的进程及其线程
 	for_each_process_thread(g, t) {
 		if (!max_count--)
 			goto unlock;
@@ -199,21 +206,22 @@ static void check_hung_uninterruptible_tasks(unsigned long timeout)
 			last_break = jiffies;
 		}
 		/* use "==" to skip the TASK_KILLABLE tasks waiting on NFS */
-		if (READ_ONCE(t->__state) == TASK_UNINTERRUPTIBLE)
-			check_hung_task(t, timeout);
+		if (READ_ONCE(t->__state) == TASK_UNINTERRUPTIBLE) // Only care D state process
+			check_hung_task(t, timeout); // 检查是否需要触发panic
 	}
  unlock:
 	rcu_read_unlock();
 	if (hung_task_show_lock)
-		debug_show_all_locks();
+		debug_show_all_locks(); // 打印进程持有的所有锁
 
 	if (hung_task_show_all_bt) {
 		hung_task_show_all_bt = false;
+		// 在所有CPU上触发进行堆栈回溯（backtrace）
 		trigger_all_cpu_backtrace();
 	}
 
 	if (hung_task_call_panic)
-		panic("hung_task: blocked tasks");
+		panic("hung_task: blocked tasks"); // 打印panc原因
 }
 
 static long hung_timeout_jiffies(unsigned long last_checked,
@@ -355,8 +363,8 @@ static int watchdog(void *dummy)
 	set_user_nice(current, 0);
 
 	for ( ; ; ) {
-		unsigned long timeout = sysctl_hung_task_timeout_secs;
-		unsigned long interval = sysctl_hung_task_check_interval_secs;
+		unsigned long timeout = sysctl_hung_task_timeout_secs; // 获取hung时间阈值
+		unsigned long interval = sysctl_hung_task_check_interval_secs; // 内核检测僵死任务的时间间隔
 		long t;
 
 		if (interval == 0)
@@ -370,7 +378,7 @@ static int watchdog(void *dummy)
 			hung_last_checked = jiffies;
 			continue;
 		}
-		schedule_timeout_interruptible(t);
+		schedule_timeout_interruptible(t); // 休眠sysctl_hung_task_timeout_secs秒
 	}
 
 	return 0;
@@ -378,14 +386,18 @@ static int watchdog(void *dummy)
 
 static int __init hung_task_init(void)
 {
+	// 注册panic通知链，在panic时执行panic_block()
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_block);
 
 	/* Disable hung task detector on suspend */
 	pm_notifier(hungtask_pm_notify, 0);
 
+	// 创建内核线程khungtaskd，入口函数为watchdog()
 	watchdog_task = kthread_run(watchdog, NULL, "khungtaskd");
+	// 初始化系统中的挂起任务（hung task）相关的sysctl参数
 	hung_task_sysctl_init();
 
 	return 0;
 }
+ // 内核初始化过程中注册一个子系统初始化函数hung_task_init
 subsys_initcall(hung_task_init);

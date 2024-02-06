@@ -8822,6 +8822,7 @@ void sched_show_task(struct task_struct *p)
 	if (!try_get_task_stack(p))
 		return;
 
+	// 打印进程名称和状态
 	pr_info("task:%-15.15s state:%c", p->comm, task_state_to_char(p));
 
 	if (task_is_running(p))
@@ -8834,9 +8835,9 @@ void sched_show_task(struct task_struct *p)
 	if (pid_alive(p))
 		ppid = task_pid_nr(rcu_dereference(p->real_parent));
 	rcu_read_unlock();
-	pr_cont(" stack:%5lu pid:%5d ppid:%6d flags:0x%08lx\n",
-		free, task_pid_nr(p), ppid,
-		read_task_thread_flags(p));
+	// free表示栈空闲量；第二个表示线程/进程pid；第三个表示父进程pid；最后一个表示进程的flags
+	pr_cont(" stack:%5lu pid:%5d ppid:%6d flags:0x%08lx\n", free, \
+							task_pid_nr(p), ppid, read_task_thread_flags(p));
 
 	print_worker_info(KERN_INFO, p);
 	print_stop_info(KERN_INFO, p);
