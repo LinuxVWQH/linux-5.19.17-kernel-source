@@ -63,6 +63,20 @@ static void warn_setuid_and_fcaps_mixed(const char *fname)
  * cap_has_capability() returns 0 when a task has a capability, but the
  * kernel's capable() and has_capability() returns 1 for this case.
  */
+/*
+	calltrace:
+	capable(CAP_SYS_NICE) 【 unprivaliged container 】
+	      	-> ns_capable(&init_user_ns, cap)
+				-> ns_capable_common
+					-> security_capable(current_cred(), ns, cap, opts);
+						-> cap_capable
+	[ 8393.612639] ########DUNCAN:cap_capable(CAP_SYS_NICE) PID:1000
+	[ 8393.612646] ########DUNCAN:cap_capable cred->uid.val:1000,cred->suid.val:1000
+	[ 8393.612652] ########DUNCAN:cap_capable ns->owner.val:0,cred->euid.val:1000
+	[ 8393.612660] ########DUNCAN:cap_capable cred->cap_effective.cap:6db03b78
+	[ 8393.612667] ########DUNCAN:cap_capable cred->user_ns->level:1
+	[ 8393.612673] ########DUNCAN:cap_capable ns->level:0
+*/
 int cap_capable(const struct cred *cred, struct user_namespace *targ_ns,
 		int cap, unsigned int opts)
 {
@@ -74,6 +88,7 @@ int cap_capable(const struct cred *cred, struct user_namespace *targ_ns,
 	 */
 	for (;;) {
 		/* Do we have the necessary capabilities? */
+		// check caller ns is equle init_user_ns
 		if (ns == cred->user_ns)
 			return cap_raised(cred->cap_effective, cap) ? 0 : -EPERM;
 
@@ -84,7 +99,7 @@ int cap_capable(const struct cred *cred, struct user_namespace *targ_ns,
 		if (ns->level <= cred->user_ns->level)
 			return -EPERM;
 
-		/* 
+		/*
 		 * The owner of the user namespace in the parent of the
 		 * user namespace has all caps.
 		 */
@@ -1447,6 +1462,7 @@ int cap_mmap_file(struct file *file, unsigned long reqprot,
 #ifdef CONFIG_SECURITY
 
 static struct security_hook_list capability_hooks[] __lsm_ro_after_init = {
+	// register cap_capable as capable hook function
 	LSM_HOOK_INIT(capable, cap_capable),
 	LSM_HOOK_INIT(settime, cap_settime),
 	LSM_HOOK_INIT(ptrace_access_check, cap_ptrace_access_check),

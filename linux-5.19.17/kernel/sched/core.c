@@ -7328,7 +7328,9 @@ static int user_check_sched_setscheduler(struct task_struct *p,
 			goto req_priv;
 	}
 
+	// CHED_FIFO && SCHED_RR
 	if (rt_policy(policy)) {
+		// cat /proc/$pid/limits | grep "Max realtime priority"
 		unsigned long rlim_rtprio = task_rlimit(p, RLIMIT_RTPRIO);
 
 		/* Can't set/change the rt policy: */
@@ -7376,6 +7378,23 @@ req_priv:
 	return 0;
 }
 
+/*
+* follow context is a demo print of sched_setscheduler()
+* 	[1823.634130] ########DUNCAN:This is an informational message. 【 container system task 】
+	[ 1823.634137] ########DUNCAN:user:1
+	[ 1823.634139] ########DUNCAN: policy:1
+	[ 1823.634141] ########DUNCAN: attr->sched_priority:17
+	[ 1823.634144] ########DUNCAN: p->mm:-1495266304
+	[ 1823.634147] ########DUNCAN: capable(CAP_SYS_NICE):0     <<<<<<======
+	[ 1823.634149] ########DUNCAN: rlim_rtprio:0
+	[ 1823.634151] ########DUNCAN: policy:1,p->policy:0
+	[ 2719.400899] ########DUNCAN:This is an informational message.【 host root task】
+	[ 2719.400904] ########DUNCAN:user:1
+	[ 2719.400907] ########DUNCAN: policy:1
+	[ 2719.400910] ########DUNCAN: attr->sched_priority:17
+	[ 2719.400912] ########DUNCAN: p->mm:2137674752
+	[ 2719.400916] ########DUNCAN: capable(CAP_SYS_NICE):1    <<<<<<======
+*/
 static int __sched_setscheduler(struct task_struct *p,
 				const struct sched_attr *attr,
 				bool user, bool pi)
@@ -7427,7 +7446,7 @@ recheck:
 
 		retval = security_task_setscheduler(p);
 		if (retval)
-			return retval;
+			return retvalW
 	}
 
 	/* Update task specific "requested" clamps */
@@ -7479,11 +7498,16 @@ recheck:
 change:
 
 	if (user) {
+#define CONFIG_RT_GROUP_SCHED
 #ifdef CONFIG_RT_GROUP_SCHED
 		/*
 		 * Do not allow realtime tasks into groups that have no runtime
 		 * assigned.
 		 */
+		/*
+		* task_group(p)->rt_bandwidth.rt_runtime=p->sched_task_group->rt_bandwidth.rt_runtime
+		* new cgroup group,cpu.rt_runtime_us default is zero
+		*/
 		if (rt_bandwidth_enabled() && rt_policy(policy) &&
 				task_group(p)->rt_bandwidth.rt_runtime == 0 &&
 				!task_group_is_autogroup(task_group(p))) {
@@ -10149,7 +10173,7 @@ static void sched_change_group(struct task_struct *tsk, int type)
 	tg = container_of(task_css_check(tsk, cpu_cgrp_id, true),
 			  struct task_group, css);
 	tg = autogroup_task_group(tsk, tg);
-	tsk->sched_task_group = tg;
+	tsk->sched_task_group = tg; // sched_task_group init end
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	if (tsk->sched_class->task_change_group)
@@ -10837,6 +10861,7 @@ static int cpu_cfs_stat_show(struct seq_file *sf, void *v)
 #endif /* CONFIG_CFS_BANDWIDTH */
 #endif /* CONFIG_FAIR_GROUP_SCHED */
 
+#define CONFIG_RT_GROUP_SCHED
 #ifdef CONFIG_RT_GROUP_SCHED
 static int cpu_rt_runtime_write(struct cgroup_subsys_state *css,
 				struct cftype *cft, s64 val)
@@ -10913,12 +10938,12 @@ static struct cftype cpu_legacy_files[] = {
 #endif
 #ifdef CONFIG_RT_GROUP_SCHED
 	{
-		.name = "rt_runtime_us",
+		.name = "rt_runtime_us", // register cpu.rt_runtime_us rw function
 		.read_s64 = cpu_rt_runtime_read,
 		.write_s64 = cpu_rt_runtime_write,
 	},
 	{
-		.name = "rt_period_us",
+		.name = "rt_period_us", // register rt_period_us rw function
 		.read_u64 = cpu_rt_period_read_uint,
 		.write_u64 = cpu_rt_period_write_uint,
 	},
