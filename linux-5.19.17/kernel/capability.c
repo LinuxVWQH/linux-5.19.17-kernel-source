@@ -368,6 +368,7 @@ static bool ns_capable_common(struct user_namespace *ns,
 {
 	int capable;
 
+	// check cap is exist
 	if (unlikely(!cap_valid(cap))) {
 		pr_crit("capable() called with invalid cap=%u\n", cap);
 		BUG();
@@ -447,6 +448,7 @@ EXPORT_SYMBOL(ns_capable_setid);
  */
 bool capable(int cap)
 {
+	// init_user_ns is root
 	return ns_capable(&init_user_ns, cap);
 }
 EXPORT_SYMBOL(capable);

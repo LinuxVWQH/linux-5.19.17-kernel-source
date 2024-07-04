@@ -619,6 +619,12 @@ struct cfs_rq {
 #endif /* CONFIG_FAIR_GROUP_SCHED */
 };
 
+/*
+root:/proc/sys/kernel# cat sched_rt_runtime_us
+950000
+root:/proc/sys/kernel# cat sched_rt_period_us
+1000000
+*/
 static inline int rt_bandwidth_enabled(void)
 {
 	return sysctl_sched_rt_runtime >= 0;
@@ -1869,6 +1875,7 @@ static inline void sched_core_tick(struct rq *rq) {}
 
 #endif /* CONFIG_SCHED_CORE && CONFIG_SCHEDSTATS */
 
+#define CONFIG_CGROUP_SCHED
 #ifdef CONFIG_CGROUP_SCHED
 
 /*

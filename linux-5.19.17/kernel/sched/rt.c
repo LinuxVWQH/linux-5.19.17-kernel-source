@@ -238,6 +238,7 @@ void init_tg_rt_entry(struct task_group *tg, struct rt_rq *rt_rq,
 	INIT_LIST_HEAD(&rt_se->run_list);
 }
 
+// create a new rt control files
 int alloc_rt_sched_group(struct task_group *tg, struct task_group *parent)
 {
 	struct rt_rq *rt_rq;
@@ -251,6 +252,7 @@ int alloc_rt_sched_group(struct task_group *tg, struct task_group *parent)
 	if (!tg->rt_se)
 		goto err;
 
+	// init branwidth value,cpu.rt_period_us default is 1000000,cpu.rt_runtime_us is 0
 	init_rt_bandwidth(&tg->rt_bandwidth,
 			ktime_to_ns(def_rt_bandwidth.rt_period), 0);
 
@@ -2850,9 +2852,11 @@ static int tg_set_rt_bandwidth(struct task_group *tg,
 		goto unlock;
 
 	raw_spin_lock_irq(&tg->rt_bandwidth.rt_runtime_lock);
+	// /sys/fs/cgroup/cpu/cpu.rt_runtime_us/rt_period_us control files update
 	tg->rt_bandwidth.rt_period = ns_to_ktime(rt_period);
 	tg->rt_bandwidth.rt_runtime = rt_runtime;
 
+	// refrush per cpu RT queue rt_runtime
 	for_each_possible_cpu(i) {
 		struct rt_rq *rt_rq = tg->rt_rq[i];
 
@@ -2873,6 +2877,7 @@ int sched_group_set_rt_runtime(struct task_group *tg, long rt_runtime_us)
 
 	rt_period = ktime_to_ns(tg->rt_bandwidth.rt_period);
 	rt_runtime = (u64)rt_runtime_us * NSEC_PER_USEC;
+	// check new value is valied
 	if (rt_runtime_us < 0)
 		rt_runtime = RUNTIME_INF;
 	else if ((u64)rt_runtime_us > U64_MAX / NSEC_PER_USEC)
